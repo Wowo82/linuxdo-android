@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 终端提示符 + 光标，象征 LINUX DO 社区 -->
+    <path
+        android:fillColor="#33D17A"
+        android:pathData="M34,38 l14,16 -14,16 -5,-5 9,-11 -9,-11 z" />
+    <path
+        android:fillColor="#E6E6E6"
+        android:pathData="M56,68 h20 v6 h-20 z" />
+</vector>
