@@ -9,6 +9,10 @@ android {
     namespace = "org.linuxdo.android"
     compileSdk = 35
 
+    // 密钥库是否存在，决定 debug / release 是否绑定签名
+    val hasKeystore = System.getenv("KEYSTORE_PATH")?.let { file(it).exists() }
+        ?: rootProject.file("keystore/linuxdo-release.jks").exists()
+
     defaultConfig {
         applicationId = "org.linuxdo.android"
         minSdk = 26
@@ -20,6 +24,27 @@ android {
         buildConfigField("String", "DEFAULT_BASE_URL", "\"https://linux.do\"")
     }
 
+    // 固定签名：CI 从 GitHub Secrets 读，本地从 keystore.properties 读
+    // 都没有时 release 走未签名（便于本地 assembleRelease 不报错）
+    signingConfigs {
+        create("release") {
+            // 优先级：环境变量（CI）> gradle property（本地）> 默认路径
+            val storeFilePath = System.getenv("KEYSTORE_PATH")
+                ?: rootProject.file("keystore/linuxdo-release.jks").absolutePath
+            val storeFileObj = file(storeFilePath)
+            if (storeFileObj.exists()) {
+                storeFile = storeFileObj
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    ?: (findProperty("keystore.password") as String?)
+                keyAlias = System.getenv("KEY_ALIAS")
+                    ?: (findProperty("key.alias") as String?)
+                    ?: "linuxdo"
+                keyPassword = System.getenv("KEY_PASSWORD")
+                    ?: (findProperty("key.password") as String?)
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -28,10 +53,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = if (hasKeystore) signingConfigs.getByName("release") else null
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // 不加 applicationIdSuffix：debug 与 release 同包名，
+            // 装新的直接覆盖，签名一致才不会冲突
             isMinifyEnabled = false
+            // debug 也用同一个签名，方便覆盖安装
+            signingConfig = if (hasKeystore) signingConfigs.getByName("release") else null
         }
     }
 

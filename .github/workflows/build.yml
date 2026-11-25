@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - debug
+          - release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,7 +23,7 @@ concurrency:
 
 jobs:
   build:
-    name: Assemble Debug APK
+    name: Assemble APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -30,49 +40,80 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ubuntu-latest 镜像已预装 Android SDK，直接用预置路径，
-      # 不装 android-actions/setup-android（它会卡在 sdkmanager 许可证交互）
+      # ubuntu-latest 已预装 Android SDK；不用 setup-android 是因为它卡在许可证交互
       - name: Configure Android SDK
         run: |
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          echo "SDK 路径: $SDK"
-          if [ ! -d "$SDK" ]; then
-            echo "::error::未找到 Android SDK"
-            ls /usr/local/lib/android 2>/dev/null || true
-            exit 1
-          fi
+          echo "SDK: $SDK"
+          [ -d "$SDK" ] || { echo "::error::未找到 Android SDK"; exit 1; }
           echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
           echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
-          # 确认需要的 platform 与 build-tools 在不在
+          echo "sdk.dir=$SDK" > local.properties
           ls "$SDK/platforms" 2>/dev/null | sort -V | tail -3
           ls "$SDK/build-tools" 2>/dev/null | sort -V | tail -3
-          echo "sdk.dir=$SDK" > local.properties
 
-      - name: Pre-accept SDK licenses
+      # 固定签名：从 Secrets 还原密钥库
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          echo "licenses done"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::未配置 KEYSTORE_BASE64，构建产物将未签名"
+            exit 0
+          fi
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/linuxdo-release.jks
+          ls -lh keystore/
+          echo "--- 密钥库内容 ---"
+          keytool -list -keystore keystore/linuxdo-release.jks -storepass "$KEYSTORE_PASSWORD"
+          {
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore/linuxdo-release.jks"
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> $GITHUB_ENV
 
       - name: Build debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Collect APK info
+      - name: Build release APK
+        if: ${{ github.event.inputs.build_type != 'debug' }}
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Verify signature
         if: success()
         run: |
+          SDK="${ANDROID_SDK_ROOT}"
+          APKSIGNER=$(find "$SDK/build-tools" -name apksigner | sort -V | tail -1)
           echo "### APK 构建完成" >> $GITHUB_STEP_SUMMARY
-          find app/build/outputs/apk -name '*.apk' | while read apk; do
+          find app/build/outputs/apk -name '*.apk' | sort | while read apk; do
             size=$(du -h "$apk" | cut -f1)
             echo "- \`$(basename "$apk")\` · $size" >> $GITHUB_STEP_SUMMARY
             ls -lh "$apk"
+            echo "--- 签名信息: $(basename "$apk") ---"
+            "$APKSIGNER" verify --print-certs "$apk" 2>&1 | grep -E "Signer #1 certificate (DN|SHA-256)" || true
           done
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
-        if: success()
+        if: ${{ success() && github.event.inputs.build_type != 'release' }}
         with:
           name: linuxdo-android-debug
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        if: ${{ success() && github.event.inputs.build_type != 'debug' }}
+        with:
+          name: linuxdo-android-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Upload build reports on failure

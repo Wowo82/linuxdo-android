@@ -9,6 +9,9 @@ captures/
 .cxx/
 *.apk
 *.aab
-*.keystore
+
+# 签名相关——绝不提交
+keystore.properties
+keystore/
 *.jks
-local.properties
+*.keystore
