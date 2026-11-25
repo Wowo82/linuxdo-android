@@ -27,15 +27,31 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 仓库暂未提交 gradle-wrapper.jar（二进制），CI 里先生成 wrapper
-      - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.9 --distribution-type bin
+      # ubuntu-latest 镜像已预装 Android SDK，直接用预置路径，
+      # 不装 android-actions/setup-android（它会卡在 sdkmanager 许可证交互）
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "SDK 路径: $SDK"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::未找到 Android SDK"
+            ls /usr/local/lib/android 2>/dev/null || true
+            exit 1
+          fi
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
+          # 确认需要的 platform 与 build-tools 在不在
+          ls "$SDK/platforms" 2>/dev/null | sort -V | tail -3
+          ls "$SDK/build-tools" 2>/dev/null | sort -V | tail -3
+          echo "sdk.dir=$SDK" > local.properties
+
+      - name: Pre-accept SDK licenses
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          echo "licenses done"
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
@@ -43,10 +59,12 @@ jobs:
       - name: Collect APK info
         if: success()
         run: |
-          find app/build/outputs/apk -name '*.apk' -exec ls -lh {} \;
           echo "### APK 构建完成" >> $GITHUB_STEP_SUMMARY
-          find app/build/outputs/apk -name '*.apk' -exec sh -c \
-            'echo "- \`$(basename {})\` · $(du -h {} | cut -f1)" >> $GITHUB_STEP_SUMMARY' \;
+          find app/build/outputs/apk -name '*.apk' | while read apk; do
+            size=$(du -h "$apk" | cut -f1)
+            echo "- \`$(basename "$apk")\` · $size" >> $GITHUB_STEP_SUMMARY
+            ls -lh "$apk"
+          done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
