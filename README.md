@@ -1,5 +1,12 @@
 # LINUX DO · Android 客户端
 
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/Compose-BOM%202024.10-4285F4?logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
+[![minSdk](https://img.shields.io/badge/minSdk-26-3DDC84?logo=android)](https://developer.android.com)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+> 文档入口：[docs/INDEX.md](docs/INDEX.md) · 路线图 [docs/ROADMAP.md](docs/ROADMAP.md) · API 参考 [docs/API.md](docs/API.md)
+
 `org.linuxdo.android` — 基于 Discourse REST API 的原生安卓客户端，
 按 iOS 版 `LINUX DO Community 1.0.5` 的功能结构复刻，Kotlin + Jetpack Compose。
 
@@ -156,6 +163,18 @@ Discourse 的话题帖子流是稀疏的：`topic.json` 只给前 20 楼 + 全�
 
 ---
 
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/INDEX.md](docs/INDEX.md) | 文档索引、快速定位表 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层、数据流、网络层、HTML 渲染、状态管理 |
+| [docs/API.md](docs/API.md) | Discourse 端点参考（含实际响应） |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 后续开发路线 P0-P3 + 技术债 |
+| [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) | iOS 样本逆向结论与取舍依据 |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | 编码规范、提交规范、调试 |
+
 ## 许可
 
-仅个人学习使用。LINUX DO 站点内容版权归原作者。
+代码：[MIT](LICENSE)。
+LINUX DO 站点内容版权归原作者，本项目不附带任何站点数据。
