@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import kotlinx.coroutines.flow.collect
 import org.linuxdo.android.AppContainer
 import org.linuxdo.android.data.model.Post
 import org.linuxdo.android.ui.browse.CenterLoading

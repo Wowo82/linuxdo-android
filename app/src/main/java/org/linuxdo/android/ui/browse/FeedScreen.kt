@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.flow.collect
 import org.linuxdo.android.data.UserRepository
 import org.linuxdo.android.data.model.Category
 import org.linuxdo.android.data.model.Topic
