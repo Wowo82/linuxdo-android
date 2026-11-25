@@ -21,19 +21,19 @@ class HeaderInterceptor(private val baseUrl: String) : Interceptor {
         val req = chain.request()
         val b = req.newBuilder()
 
-        if (b.header("Accept") == null) b.header("Accept", "application/json")
-        if (b.header("X-Requested-With") == null) {
+        if (req.header("Accept") == null) b.header("Accept", "application/json")
+        if (req.header("X-Requested-With") == null) {
             b.header("X-Requested-With", "XMLHttpRequest")
         }
-        if (b.header("Discourse-Logged-In") == null) {
+        if (req.header("Discourse-Logged-In") == null) {
             b.header("Discourse-Logged-In", "true")
         }
-        if (b.header("User-Agent") == null) b.header("User-Agent", userAgent())
+        if (req.header("User-Agent") == null) b.header("User-Agent", userAgent())
 
         val needsCsrfHeaders = req.method != "GET" && req.method != "HEAD"
         if (needsCsrfHeaders) {
-            if (b.header("Origin") == null) b.header("Origin", origin)
-            if (b.header("Referer") == null) b.header("Referer", "$origin/")
+            if (req.header("Origin") == null) b.header("Origin", origin)
+            if (req.header("Referer") == null) b.header("Referer", "$origin/")
         }
 
         return chain.proceed(b.build())

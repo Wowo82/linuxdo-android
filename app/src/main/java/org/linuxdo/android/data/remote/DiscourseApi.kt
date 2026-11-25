@@ -15,7 +15,7 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class HttpException(val code: Int, val body: String, val url: String) :
     IOException("HTTP $code for $url")
@@ -114,7 +114,7 @@ class DiscourseApi(
     // ---------- 底层执行 ----------
 
     private suspend fun execute(req: Request): String =
-        suspendCoroutine { cont ->
+        suspendCancellableCoroutine { cont ->
             val call = client.newCall(req)
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
