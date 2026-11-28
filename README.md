@@ -192,6 +192,7 @@ Discourse 对 browser session 的**非 GET** 请求强制校验 `X-CSRF-Token`�
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 后续开发路线 P0-P3 + 技术债 |
 | [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) | iOS 样本逆向结论与取舍依据 |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | 编码规范、提交规范、调试 |
+| [docs/wiki/README.md](docs/wiki/README.md) | Code Wiki：模块职责、关键类与函数、依赖关系、构建运行 |
 
 ## 许可
 
