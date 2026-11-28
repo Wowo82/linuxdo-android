@@ -11,6 +11,11 @@
 - **[API](API.md)** — Discourse 端点参考（含实际响应示例）
 - **[ROADMAP](ROADMAP.md)** — 接下来做什么、按优先级排
 
+## 要理解代码
+
+- **[wiki/README](wiki/README.md)** — Code Wiki：逐模块、逐类、逐方法的代码结构索引，
+  含模块职责、依赖关系、关键流程、构建运行与测试说明
+
 ## 要理解为什么
 
 - **[REVERSE-ENGINEERING](REVERSE-ENGINEERING.md)** — iOS 版样本逆向结论，
