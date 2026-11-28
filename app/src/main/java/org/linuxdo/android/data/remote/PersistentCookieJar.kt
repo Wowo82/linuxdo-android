@@ -22,8 +22,36 @@ class PersistentCookieJar(
         load().forEach { store[keyOf(it)] = it }
     }
 
+    // OkHttp 会在多个网络线程并发读写，网页登录同步 cookie 又在主线程，全部加锁
+
+    @Synchronized
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        if (cookies.isEmpty()) return
+        if (upsertLocked(cookies)) save(store.values.toList())
+    }
+
+    @Synchronized
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val now = System.currentTimeMillis()
+        return store.values.filter { it.matches(url) && it.expiresAt > now }
+    }
+
+    /** 网页登录：把 WebView 里读到的 cookie 合并进 jar 并落盘 */
+    @Synchronized
+    fun putAll(cookies: List<Cookie>) {
+        if (upsertLocked(cookies)) save(store.values.toList())
+    }
+
+    @Synchronized
+    fun clear() {
+        store.clear()
+        save(emptyList())
+    }
+
+    @Synchronized
+    fun snapshot(): List<Cookie> = store.values.toList()
+
+    private fun upsertLocked(cookies: List<Cookie>): Boolean {
+        if (cookies.isEmpty()) return false
         var changed = false
         val now = System.currentTimeMillis()
         for (c in cookies) {
@@ -35,20 +63,8 @@ class PersistentCookieJar(
                 changed = true
             }
         }
-        if (changed) save(store.values.toList())
+        return changed
     }
-
-    override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val now = System.currentTimeMillis()
-        return store.values.filter { it.matches(url) && it.expiresAt > now }
-    }
-
-    fun clear() {
-        store.clear()
-        save(emptyList())
-    }
-
-    fun snapshot(): List<Cookie> = store.values.toList()
 
     private fun keyOf(c: Cookie): String = "${c.domain}|${c.path}|${c.name}"
 }
