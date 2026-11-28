@@ -42,10 +42,14 @@ object Html {
         .replace("&#39;", "'")
         .replace("&apos;", "'")
         .replace(Regex("&#(\\d+);")) { m ->
-            m.groupValues[1].toIntOrNull()?.let { String(Character.toChars(it)) } ?: ""
+            m.groupValues[1].toIntOrNull()
+                ?.takeIf { Character.isValidCodePoint(it) }
+                ?.let { String(Character.toChars(it)) } ?: ""
         }
         .replace(Regex("&#x([0-9a-fA-F]+);")) { m ->
-            m.groupValues[1].toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: ""
+            m.groupValues[1].toIntOrNull(16)
+                ?.takeIf { Character.isValidCodePoint(it) }
+                ?.let { String(Character.toChars(it)) } ?: ""
         }
 
     /** 抽第一张图，用作列表缩略图 */
