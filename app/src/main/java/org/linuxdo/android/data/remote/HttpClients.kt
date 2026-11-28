@@ -21,6 +21,7 @@ object HttpClients {
             .retryOnConnectionFailure(true)
             .followRedirects(true)
             .followSslRedirects(true)
+            .dns(Doh.dns())
             .build()
     }
 

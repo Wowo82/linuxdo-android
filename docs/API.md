@@ -105,7 +105,10 @@ second_factor_method=1
 
 其他列表同理：`/top.json`、`/new.json`、`/unread.json`、`/hot.json`、`/bookmarks.json`
 
-分类维度：`/c/{categorySlugOrId}/latest.json`
+分类维度：`/c/{slug}/{id}/l/{filter}.json`（只给 id 也可以，服务端 301 到规范地址）
+
+分类列表：`/categories.json?include_subcategories=true`
+（顶级分类的 `subcategory_list` 里会带完整子分类）
 
 周期（仅 top）：`/top.json?period=weekly`，可选
 `daily` / `weekly` / `monthly` / `quarterly` / `yearly` / `all`

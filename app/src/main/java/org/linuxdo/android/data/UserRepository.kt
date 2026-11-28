@@ -4,6 +4,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import org.linuxdo.android.data.model.CategoriesResponse
 import org.linuxdo.android.data.model.CategoryList
 import org.linuxdo.android.data.model.LoginResponse
 import org.linuxdo.android.data.model.NotificationsResponse
@@ -53,6 +54,13 @@ class UserRepository(
         sessionStore.csrfTokens.update(token)
         return token
     }
+
+    /** 分类树变化很少，重复进版块/发帖页时避免反复拉整棵分类树 */
+    @Volatile
+    private var categoryCache: CategoryList? = null
+
+    /** 分类缓存的锁：读写在 IO 线程，invalidateLists 可能在主线程调用 */
+    private val categoryLock = Any()
 
     // ============================================================
     // 会话 / 站点
@@ -133,16 +141,24 @@ class UserRepository(
         filter: ListFilter,
         page: Int = 0,
         categoryId: Long? = null,
+        categorySlug: String? = null,
         period: Period? = null,
         forceReload: Boolean = false,
     ): TopicListResponse {
         val key = listCacheKey(filter, page, categoryId, period)
         if (!forceReload) cachedList(key)?.let { return it }
 
+        // 分类列表的规范路由是 /c/{slug}/{id}/l/{filter}.json；
+        // 只给 id 也可以，服务端会 301 到带 slug 的地址。
         val path = buildString {
             append('/')
             if (categoryId != null && filter != ListFilter.CATEGORIES) {
-                append("c/").append(categoryId).append('/').append(filter.path)
+                append("c/")
+                    .append(categorySlug?.takeIf { it.isNotBlank() } ?: categoryId)
+                    .append('/')
+                    .append(categoryId)
+                    .append("/l/")
+                    .append(filter.path)
             } else {
                 append(filter.path)
             }
@@ -152,7 +168,6 @@ class UserRepository(
             put("page", page.toString())
             put("per_page", "30")
             if (filter == ListFilter.TOP && period != null) put("period", period.value)
-            if (categoryId != null) put("category_id", categoryId.toString())
         }
         val resp: TopicListResponse = json.decodeFromString(api.getRaw(path, params))
         synchronized(cacheLock) { topicCache[key] = resp }
@@ -162,12 +177,21 @@ class UserRepository(
     private fun cachedList(key: String): TopicListResponse? =
         synchronized(cacheLock) { topicCache[key] }
 
-    fun invalidateLists() = synchronized(cacheLock) { topicCache.clear() }
+    fun invalidateLists() {
+        synchronized(cacheLock) { topicCache.clear() }
+        synchronized(categoryLock) { categoryCache = null }
+    }
 
-    suspend fun categories(): CategoryList = try {
-        json.decodeFromString<CategoryList>(api.getRaw("/categories.json"))
-    } catch (e: ApiException) {
-        CategoryList()
+    suspend fun categories(forceReload: Boolean = false): CategoryList {
+        if (!forceReload) synchronized(categoryLock) { categoryCache }?.let { return it }
+        return try {
+            val raw = api.getRaw("/categories.json", mapOf("include_subcategories" to "true"))
+            val list = json.decodeFromString<CategoriesResponse>(raw).categoryList
+            synchronized(categoryLock) { categoryCache = list }
+            list
+        } catch (e: ApiException) {
+            synchronized(categoryLock) { categoryCache } ?: CategoryList()
+        }
     }
 
     // ============================================================

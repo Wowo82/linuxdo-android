@@ -71,7 +71,7 @@ https://ios-app.ddd.oaifree.com/query-dns
 ```
 
 **结论**：linux.do 在某些地区确实会被 DNS 污染，官方 App 才内置这么多备选。
-安卓侧的 `Doh.kt` 用了阿里 + Google 双路，够用。
+安卓侧的 `Doh.kt` 改用了始皇 / 1mol氚两路 Linux DO 专用 DoH。
 
 ### 站点常量
 
@@ -328,7 +328,7 @@ curl -sS 'https://linux.do/mini-app-api/apps' \
 | iOS 做法 | 安卓选择 | 理由 |
 |---|---|---|
 | 自建 curl + OpenSSL | OkHttp | 功能等价，维护成本低得多 |
-| DoH 10 路备用 | DoH 2 路（阿里+Google）| 够用，且默认关闭避免内网问题 |
+| DoH 10 路备用 | DoH 2 路（始皇 + 1mol氚）| 只接管 linux.do，双路失败回落系统 DNS |
 | App Attest + mTLS | 标准 cookie 会话 | 技术不可行，且不必要 |
 | 微应用平台 | 不移植 | 商店未开，只有 demo |
 | cooked HTML 原生解析 | TextView + HtmlCompat | 成本最低，覆盖 90% 内容 |

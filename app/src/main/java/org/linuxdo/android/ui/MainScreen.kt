@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
@@ -35,6 +36,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.linuxdo.android.AppContainer
+import org.linuxdo.android.data.model.Category
+import org.linuxdo.android.ui.browse.CategoriesScreen
+import org.linuxdo.android.ui.browse.CategoryTopicsScreen
 import org.linuxdo.android.ui.browse.FeedViewModel
 import org.linuxdo.android.ui.browse.FeedScreen
 import org.linuxdo.android.ui.notifications.NotificationsScreen
@@ -45,6 +49,7 @@ import org.linuxdo.android.ui.topic.TopicDetailScreen
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     TOPICS("话题", Icons.Outlined.Explore),
+    CATEGORIES("版块", Icons.Outlined.Dashboard),
     SEARCH("搜索", Icons.Outlined.Search),
     NOTIFICATIONS("通知", Icons.Outlined.Notifications),
     ME("我的", Icons.Outlined.Person),
@@ -63,6 +68,7 @@ fun MainScreen(
     var tab by remember { mutableIntStateOf(0) }
     var openTopicId by remember { mutableStateOf<Long?>(null) }
     var openPostNumber by remember { mutableStateOf<Int?>(null) }
+    var openCategory by remember { mutableStateOf<Category?>(null) }
     var composing by remember { mutableStateOf(false) }
 
     // 外部链接进来：直接打开对应话题，并停在指定楼层
@@ -81,8 +87,9 @@ fun MainScreen(
     val title = when {
         openTopicId != null -> ""
         tab == 0 -> state.siteTitle
-        tab == 1 -> "搜索"
-        tab == 2 -> "通知"
+        tab == 1 -> "版块"
+        tab == 2 -> "搜索"
+        tab == 3 -> "通知"
         else -> "我的"
     }
 
@@ -95,6 +102,17 @@ fun MainScreen(
                 openTopicId = null
                 openPostNumber = null
             },
+        )
+        return
+    }
+
+    val category = openCategory
+    if (category != null) {
+        CategoryTopicsScreen(
+            category = category,
+            container = container,
+            onBack = { openCategory = null },
+            onOpenTopic = { t -> openTopicId = t.id },
         )
         return
     }
@@ -166,11 +184,15 @@ fun MainScreen(
             Box(Modifier.fillMaxSize()) {
                 when (tab) {
                     0 -> FeedScreen(vm = feedVm, onOpenTopic = { t -> openTopicId = t.id })
-                    1 -> SearchScreen(
+                    1 -> CategoriesScreen(
+                        container = container,
+                        onOpenCategory = { openCategory = it },
+                    )
+                    2 -> SearchScreen(
                         container = container,
                         onOpenTopic = { id -> openTopicId = id },
                     )
-                    2 -> NotificationsScreen(
+                    3 -> NotificationsScreen(
                         container = container,
                         onOpenTopic = { id -> openTopicId = id },
                         onRead = { vm.refreshUnread() },
