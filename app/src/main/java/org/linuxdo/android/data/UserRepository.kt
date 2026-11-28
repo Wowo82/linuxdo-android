@@ -19,6 +19,7 @@ import org.linuxdo.android.data.model.User
 import org.linuxdo.android.data.model.UserDetailResponse
 import org.linuxdo.android.data.remote.ApiException
 import org.linuxdo.android.data.remote.DiscourseApi
+import org.linuxdo.android.data.remote.HttpException
 import java.net.URLEncoder
 
 /**
@@ -43,6 +44,16 @@ internal fun loginCodeForm(email: String, honeypot: HoneypotResponse): Map<Strin
     "signup" to "false",
     "password_confirmation" to honeypot.value,
     "challenge" to honeypot.challenge.reversed(),
+)
+
+/**
+ * 人机验证 token 的提交路径。
+ * linux.do 用 discourse-captcha 插件（/captcha/...），老站点可能是
+ * discourse-hcaptcha（/hcaptcha/...）；按顺序探测，只有 404 才换下一个。
+ */
+private val HCAPTCHA_CREATE_PATHS = listOf(
+    "/captcha/hcaptcha/create.json",
+    "/hcaptcha/create.json",
 )
 
 /**
@@ -191,6 +202,27 @@ class UserRepository(
             throw IllegalStateException(parsed.message ?: "发送失败")
         }
         Unit
+    }
+
+    /**
+     * 人机验证通过后，把 hCaptcha token 交给站点。
+     * 站点会把它短暂记在服务端会话（约 2 分钟），随后重新提交 /session
+     * 就不会再要求人机验证。
+     */
+    suspend fun submitHcaptchaToken(token: String): Result<Unit> = runCatching {
+        refreshCsrfToken()
+        var lastError: Throwable? = null
+        for (path in HCAPTCHA_CREATE_PATHS) {
+            try {
+                api.postForm(path, mapOf("token" to token))
+                return@runCatching
+            } catch (e: ApiException) {
+                lastError = e
+                // 只有路径不存在才换下一个路径；CSRF / 网络错误直接抛出
+                if ((e.cause as? HttpException)?.code != 404) throw e
+            }
+        }
+        throw lastError ?: IllegalStateException("人机验证失败")
     }
 
     /** 网页登录完成、cookie 已同步进 jar 后调用：验证会话并补齐本地登录态 */
