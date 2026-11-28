@@ -159,6 +159,9 @@ private fun LoginCard(
 
     var webLoginPath by remember { mutableStateOf<String?>(null) }
     var forgotDialog by remember { mutableStateOf(false) }
+    var captchaDialog by remember { mutableStateOf(false) }
+    val loginBaseUrl = container.sessionStore.baseUrl
+    val captchaSiteKey = remember(loginBaseUrl) { hcaptchaSiteKeyFor(loginBaseUrl) }
     val scope = rememberCoroutineScope()
 
     fun handleFailure(e: Throwable) {
@@ -359,6 +362,7 @@ private fun LoginCard(
                 LoginError(
                     error = error,
                     showWebFallback = captchaBlocked,
+                    onCaptcha = if (captchaSiteKey != null) ({ captchaDialog = true }) else null,
                     onWebLogin = { webLoginPath = "/login" },
                 )
 
@@ -588,6 +592,39 @@ private fun LoginCard(
         )
     }
 
+    if (captchaDialog && captchaSiteKey != null) {
+        HcaptchaDialog(
+            baseUrl = loginBaseUrl,
+            siteKey = captchaSiteKey,
+            onDismiss = { captchaDialog = false },
+            onSolved = { token ->
+                captchaDialog = false
+                loading = true
+                error = null
+                captchaBlocked = false
+                scope.launch {
+                    container.repository.submitHcaptchaToken(token)
+                        .onSuccess {
+                            // 验证 token 已落到同一个服务端会话，重新提交密码登录
+                            container.repository.login(login, password)
+                                .onSuccess { u ->
+                                    loading = false
+                                    onLoggedIn(u)
+                                }
+                                .onFailure { e ->
+                                    loading = false
+                                    handleFailure(e)
+                                }
+                        }
+                        .onFailure { e ->
+                            loading = false
+                            error = "人机验证提交失败：${e.message ?: "请重试"}"
+                        }
+                }
+            },
+        )
+    }
+
     val path = webLoginPath
     if (path != null) {
         WebLoginDialog(
@@ -595,6 +632,16 @@ private fun LoginCard(
             startPath = path,
             container = container,
             onDismiss = { webLoginPath = null },
+            // 网页里的人机验证加载不出来时，给一个不依赖验证码的登录出口
+            onUseEmailCode = {
+                webLoginPath = null
+                mode = LoginMode.EMAIL_CODE
+                codeSent = false
+                emailCode = ""
+                error = null
+                captchaBlocked = false
+                if (email.isBlank() && login.contains("@")) email = login.trim()
+            },
             onLoggedIn = { u ->
                 webLoginPath = null
                 onLoggedIn(u)
@@ -629,13 +676,21 @@ private fun LoginError(
     error: String?,
     showWebFallback: Boolean,
     onWebLogin: () -> Unit,
+    onCaptcha: (() -> Unit)? = null,
 ) {
     if (error == null) return
     Spacer(Modifier.height(8.dp))
     Text(error, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
     if (showWebFallback) {
-        TextButton(onClick = onWebLogin) {
-            Text("需要人机验证，改用网页登录", fontSize = 11.5.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (onCaptcha != null) {
+                TextButton(onClick = onCaptcha) {
+                    Text("完成人机验证", fontSize = 11.5.sp)
+                }
+            }
+            TextButton(onClick = onWebLogin) {
+                Text("改用网页登录", fontSize = 11.5.sp)
+            }
         }
     }
 }
