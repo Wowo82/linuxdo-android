@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -71,6 +72,7 @@ fun WebLoginDialog(
     startPath: String,
     container: AppContainer,
     onDismiss: () -> Unit,
+    onUseEmailCode: (() -> Unit)? = null,
     onLoggedIn: (User) -> Unit,
 ) {
     val context = LocalContext.current
@@ -88,6 +90,15 @@ fun WebLoginDialog(
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             settings.mediaPlaybackRequiresUserGesture = true
+            // WebView 默认 UA 带 "; wv" / "Version/4.0"，部分站点组件（含人机验证）
+            // 会把嵌入式浏览器 UA 判为不支持而拒绝渲染；去掉 WebView 标记，
+            // 保留系统 WebView 的真实 Chrome 版本。
+            val defaultUa = settings.userAgentString
+            if (defaultUa != null && defaultUa.contains("; wv")) {
+                settings.userAgentString = defaultUa
+                    .replace("; wv", "")
+                    .replace("Version/4.0 ", "")
+            }
             val view = this
             CookieManager.getInstance().apply {
                 setAcceptCookie(true)
@@ -173,6 +184,14 @@ fun WebLoginDialog(
                             }
                         },
                         actions = {
+                            IconButton(onClick = { webView.reload() }) {
+                                Icon(Icons.Filled.Refresh, "重新加载")
+                            }
+                            if (initialPath == "/login" && onUseEmailCode != null) {
+                                TextButton(onClick = onUseEmailCode) {
+                                    Text("邮箱验证码", fontSize = 12.sp)
+                                }
+                            }
                             if (initialPath != "/login") {
                                 TextButton(onClick = { webView.loadUrl("$baseUrl/login") }) {
                                     Text("完整登录页", fontSize = 12.sp)
@@ -223,11 +242,19 @@ fun WebLoginDialog(
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "支持站点自带的 OAuth / SSO / 通行密钥 / 人机验证等方式",
+                        "支持 OAuth / SSO / 通行密钥 / 人机验证",
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "人机验证无法加载时，请改用邮箱验证码或 GitHub 登录",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        fontSize = 10.5.sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     )
                     Spacer(Modifier.height(10.dp))
                 }

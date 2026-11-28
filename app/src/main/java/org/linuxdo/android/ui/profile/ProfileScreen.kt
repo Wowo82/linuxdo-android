@@ -595,6 +595,16 @@ private fun LoginCard(
             startPath = path,
             container = container,
             onDismiss = { webLoginPath = null },
+            // 网页里的人机验证加载不出来时，给一个不依赖验证码的登录出口
+            onUseEmailCode = {
+                webLoginPath = null
+                mode = LoginMode.EMAIL_CODE
+                codeSent = false
+                emailCode = ""
+                error = null
+                captchaBlocked = false
+                if (email.isBlank() && login.contains("@")) email = login.trim()
+            },
             onLoggedIn = { u ->
                 webLoginPath = null
                 onLoggedIn(u)
