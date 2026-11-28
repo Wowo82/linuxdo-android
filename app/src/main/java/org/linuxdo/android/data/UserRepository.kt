@@ -134,8 +134,20 @@ class UserRepository(
         QUARTERLY("quarterly"), YEARLY("yearly"), ALL("all"),
     }
 
-    fun listCacheKey(filter: ListFilter, page: Int, categoryId: Long?, period: Period?): String =
-        "${filter.path}|${categoryId ?: -1}|${period?.value ?: "-"}|$page"
+    fun listCacheKey(
+        filter: ListFilter,
+        page: Int,
+        categoryId: Long?,
+        period: Period?,
+        categorySlug: String? = null,
+    ): String = buildString {
+        append(filter.path).append('|')
+        append(categoryId ?: -1).append('|')
+        append(period?.value ?: "-").append('|')
+        append(page)
+        // slug 进 key：分类改名后 slug 会变，不能和旧 slug 的缓存混用
+        if (!categorySlug.isNullOrBlank()) append('|').append(categorySlug)
+    }
 
     suspend fun topicList(
         filter: ListFilter,
@@ -145,25 +157,11 @@ class UserRepository(
         period: Period? = null,
         forceReload: Boolean = false,
     ): TopicListResponse {
-        val key = listCacheKey(filter, page, categoryId, period)
+        val key = listCacheKey(filter, page, categoryId, period, categorySlug)
         if (!forceReload) cachedList(key)?.let { return it }
 
-        // 分类列表的规范路由是 /c/{slug}/{id}/l/{filter}.json；
-        // 只给 id 也可以，服务端会 301 到带 slug 的地址。
-        val path = buildString {
-            append('/')
-            if (categoryId != null && filter != ListFilter.CATEGORIES) {
-                append("c/")
-                    .append(categorySlug?.takeIf { it.isNotBlank() } ?: categoryId)
-                    .append('/')
-                    .append(categoryId)
-                    .append("/l/")
-                    .append(filter.path)
-            } else {
-                append(filter.path)
-            }
-            append(".json")
-        }
+        // 分类列表的规范路由是 /c/{slug}/{id}/l/{filter}.json（见 CategoryRoute）
+        val path = CategoryRoute.path(filter.path, categoryId, categorySlug)
         val params = buildMap<String, String?> {
             put("page", page.toString())
             put("per_page", "30")

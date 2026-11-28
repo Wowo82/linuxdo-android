@@ -26,10 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,28 +50,21 @@ fun CategoriesScreen(
     container: AppContainer,
     onOpenCategory: (Category) -> Unit,
 ) {
-    var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    // 用 ViewModel 而不是 remember：旋转屏幕 / 重进 tab 不该重拉整棵分类树，
+    // 而且项目里其它页面都是 ViewModel + StateFlow，保持一致。
+    val vm: CategoriesViewModel = viewModel(
+        key = "categories",
+        factory = simpleFactory { CategoriesViewModel(container.repository) },
+    )
+    val state by vm.state.collectState()
+    val categories = state.categories
 
-    LaunchedEffect(reload) {
-        loading = true
-        error = null
-        runCatching { container.repository.categories() }
-            .onSuccess {
-                categories = it.categories
-                loading = false
-            }
-            .onFailure {
-                error = it.message ?: "版块加载失败"
-                loading = false
-            }
-    }
+    LaunchedEffect(Unit) { vm.ensureLoaded() }
 
     when {
-        loading -> CenterLoading()
-        error != null -> ErrorBox(error.orEmpty()) { reload += 1 }
+        state.loading && categories.isEmpty() -> CenterLoading()
+        state.error != null && categories.isEmpty() ->
+            ErrorBox(state.error.orEmpty()) { vm.reload() }
         categories.isEmpty() -> EmptyBox("没有可见的版块")
         else -> LazyColumn(Modifier.fillMaxSize()) {
             categories.forEach { parent ->
