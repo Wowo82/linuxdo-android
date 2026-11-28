@@ -58,7 +58,7 @@ android {
 | 发帖 | 标题 + 分类 + Markdown 正文 | ✅ |
 | 搜索 | 全文 + 用户 + 分类 | ✅ 300ms 防抖、历史记录 |
 | 通知 | 分组未读、按类型图标 | ✅ 类型映射中文标签 |
-| 登录 | cookie 会话 + App Attest | ✅ cookie 会话（见下文「差异」） |
+| 登录 | cookie 会话 + App Attest | ✅ 密码 / 两步验证 / 邮箱验证码 / 网页 OAuth·通行密钥 |
 | 深色模式 | 跟随系统 | ✅ 跟随系统 |
 | 我的 | 资料、徽章、统计 | ✅ 资料 + TL + 统计 |
 | 微应用（Pajero） | JSC 运行时 + 原生渲染 | ❌ 未移植 |
@@ -92,7 +92,7 @@ app/src/main/java/org/linuxdo/android/
 │  ├─ topic/                详情 + 发帖
 │  ├─ search/               搜索
 │  ├─ notifications/        通知
-│  ├─ profile/              我的 / 登录 / 服务器设置
+│  ├─ profile/              我的 / 登录（密码·2FA·邮箱码·网页登录）/ 服务器设置
 │  ├─ common/HtmlText.kt    cooked HTML → TextView 渲染
 │  └─ theme/                配色 + 头像兜底 + 分类标签
 └─ util/
@@ -166,6 +166,8 @@ Discourse 的话题帖子流是稀疏的：`topic.json` 只给前 20 楼 + 全�
 - 未实现私信（PM）、聊天（Chat 插件）、审核队列
 - 没有离线缓存正文，断网只能看列表缓存
 - 自建站点目前只支持 https（`usesCleartextTraffic=false`）
+- 登录遇到 hCaptcha 时必须在 App 内置网页登录里完成；原生密码 / 邮箱验证码请求无法代过人机验证
+- Google 等部分 OAuth 提供商可能拒绝 WebView 内登录，可改用其他登录方式
 
 ## 写操作与 CSRF
 

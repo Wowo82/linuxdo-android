@@ -502,9 +502,35 @@ data class LoginResponse(
     val error: String? = null,
     val reason: String? = null,
     @SerialName("wait_seconds") val waitSeconds: Int? = null,
+    /** 密码登录的 2FA 失败响应 */
+    @SerialName("totp_enabled") val totpEnabled: Boolean = false,
+    @SerialName("backup_enabled") val backupEnabled: Boolean = false,
+    @SerialName("security_key_enabled") val securityKeyEnabled: Boolean = false,
+    /** 邮箱验证码登录的 2FA 信息响应（字段名与密码登录不同） */
+    @SerialName("backup_codes_enabled") val backupCodesEnabled: Boolean = false,
+    @SerialName("security_key_required") val securityKeyRequired: Boolean = false,
+    @SerialName("second_factor_required") val secondFactorFlag: Boolean = false,
+    @SerialName("pending_approval") val pendingApproval: Boolean = false,
 ) {
     val success: Boolean get() = error == null
+    val backupAvailable: Boolean get() = backupEnabled || backupCodesEnabled
+    val secondFactorRequired: Boolean
+        get() = secondFactorFlag || totpEnabled || backupAvailable || securityKeyEnabled ||
+            securityKeyRequired ||
+            reason == "invalid_second_factor" || reason == "invalid_second_factor_method"
+
+    /** 站点开了 hCaptcha / reCaptcha 时，原生请求会被要求先过人机验证 */
+    val captchaRequired: Boolean
+        get() = error?.contains("captcha", ignoreCase = true) == true ||
+            error?.contains("人机验证") == true
 }
+
+/** GET /session/hp.json：一次性验证码登录前必须带上的蜜罐字段 */
+@Serializable
+data class HoneypotResponse(
+    val value: String = "",
+    val challenge: String = "",
+)
 
 @Serializable
 data class SimpleResult(

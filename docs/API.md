@@ -43,20 +43,56 @@ Cookie: _t=...
 
 ### `POST /session`
 
-登录。form 参数：
+密码登录。form 参数：
 
 ```
 login=<用户名或邮箱>
 password=<密码>
-second_factor_method=1
+second_factor_method=1        # 可选：1=TOTP，2=备用码
+second_factor_token=123456    # 2FA 账号必填
 ```
 
 失败返回 `{"error": "..."}` 或 `{"reason": "...", "wait_seconds": 5}`。
 
-**注意**：2FA 账号会返回 `{"error": "invalid_second_factor"}`，需要额外走
-`POST /session/2fa` 带 `second_factor_token`。当前未实现。
+**两步验证**：密码正确但缺验证码时返回
+`{"error":"...","reason":"invalid_second_factor","totp_enabled":true,"backup_enabled":true,"security_key_enabled":false}`；
+带上 `second_factor_method` + `second_factor_token` **重新 POST `/session`** 即可。
+安全密钥 / Passkey 走网页登录。
 
-**代码**：`UserRepository.login()`
+**人机验证**：站点开启 hCaptcha / reCaptcha 时会返回「人机验证失败」，
+原生请求无法代过验证码，需要改走网页登录（App 会给出入口）。
+
+**代码**：`UserRepository.login()` / `loginWithSecondFactor()`
+
+### 邮箱一次性登录代码
+
+```
+GET  /session/hp.json              → {"value":"...","challenge":"..."}
+POST /session/login-code           email, signup=false,
+                                   password_confirmation=<value>,
+                                   challenge=<challenge 反转>
+POST /session/login-code/verify    email, code
+                                   （2FA 账号再带 second_factor_method / second_factor_token）
+```
+
+验证通过后服务端种 cookie，再 `GET /session/current.json` 确认登录态。
+发信接口在开启 hCaptcha 的站点会被拦截，App 检测到「人机验证失败」会引导到网页登录。
+
+**代码**：`UserRepository.requestLoginCode()` / `verifyLoginCode()`
+
+### `POST /session/forgot_password`
+
+form：`login=<用户名或邮箱>`。只发重置邮件，响应不暴露账号是否存在。
+
+**代码**：`UserRepository.forgotPassword()`
+
+### 第三方 / 通行密钥登录
+
+Discourse 的 OAuth（Google / GitHub / Discord / Apple）与 Passkey 都在站点登录页完成。
+App 用 WebView 打开 `/auth/{provider}` 或 `/login`，登录成功后把 cookie（含 `_t`）
+同步进 OkHttp 的 cookie jar，再走 `/session/current.json`。
+
+**代码**：`WebLoginDialog` + `UserRepository.completeWebLogin()`
 
 ### `DELETE /session/{username}`
 
@@ -552,7 +588,6 @@ raw=正文
 
 | 端点 | 用途 |
 |---|---|
-| `POST /session/2fa` | 两步验证登录 |
 | `GET /message-bus/{clientId}/poll` | 长轮询实时更新 |
 | `GET /mini-app-api/apps` | 微应用商店列表 |
 | `GET /review/queue.json` | 审核队列（仅版主） |
