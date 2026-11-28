@@ -1,5 +1,9 @@
 package org.linuxdo.android.ui
 
+import android.app.Activity
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,11 +30,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
@@ -83,6 +89,42 @@ fun MainScreen(
         key = "feed",
         factory = simpleFactory { FeedViewModel(container.repository) },
     )
+
+    // 返回键 / 全面屏返回手势：按页面层级逐级返回，首页二次确认退出，
+    // 避免手势一滑就直接退到桌面。
+    val context = LocalContext.current
+    var lastBackPress by remember { mutableLongStateOf(0L) }
+    BackHandler {
+        when {
+            openTopicId != null -> {
+                openTopicId = null
+                openPostNumber = null
+                lastBackPress = 0L
+            }
+            openCategory != null -> {
+                openCategory = null
+                lastBackPress = 0L
+            }
+            composing -> {
+                composing = false
+                lastBackPress = 0L
+            }
+            tab != 0 -> {
+                tab = 0
+                feedVm.ensureLoaded()
+                lastBackPress = 0L
+            }
+            else -> {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastBackPress <= 2000L) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBackPress = now
+                    Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     val title = when {
         openTopicId != null -> ""
