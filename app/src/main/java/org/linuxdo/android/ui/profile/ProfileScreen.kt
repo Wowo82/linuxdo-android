@@ -46,11 +46,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.linuxdo.android.AppContainer
+import org.linuxdo.android.data.SecondFactorRequiredException
 import org.linuxdo.android.data.model.User
 import org.linuxdo.android.ui.theme.AvatarFallback
 import org.linuxdo.android.util.TimeFmt
@@ -138,6 +140,11 @@ private fun LoginCard(
     var password by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var secondFactor by remember { mutableStateOf<SecondFactorRequiredException?>(null) }
+    var useBackupCode by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf("") }
+    var verifying by remember { mutableStateOf(false) }
+    var webLogin by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -156,7 +163,7 @@ private fun LoginCard(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "使用社区账号登录，凭据只保存在本机加密存储",
+            "账号密码，或使用站点支持的网页登录方式",
             fontSize = 11.5.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         )
@@ -185,49 +192,219 @@ private fun LoginCard(
             shape = RoundedCornerShape(10.dp),
         )
 
-        error?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-        }
+        val challenge = secondFactor
+        if (challenge == null) {
+            error?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
 
-        Spacer(Modifier.height(18.dp))
-        Button(
-            onClick = {
-                if (login.isBlank() || password.isBlank()) {
-                    error = "用户名和密码都不能为空"
-                    return@Button
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = {
+                    if (login.isBlank() || password.isBlank()) {
+                        error = "用户名和密码都不能为空"
+                        return@Button
+                    }
+                    loading = true
+                    error = null
+                    scope.launch {
+                        container.repository.login(login, password)
+                            .onSuccess { u ->
+                                loading = false
+                                onLoggedIn(u)
+                            }
+                            .onFailure { e ->
+                                loading = false
+                                if (e is SecondFactorRequiredException) {
+                                    secondFactor = e
+                                    useBackupCode = !e.totpEnabled && e.backupEnabled
+                                    code = ""
+                                    error = null
+                                } else {
+                                    error = e.message ?: "登录失败"
+                                }
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                ),
+                enabled = !loading,
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(
+                        Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text("登录", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
-                loading = true
-                error = null
-                scope.launch {
-                    container.repository.login(login, password)
-                        .onSuccess { u ->
-                            loading = false
-                            onLoggedIn(u)
-                        }
-                        .onFailure {
-                            loading = false
-                            error = it.message ?: "登录失败"
-                        }
+            }
+        } else {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "两步验证",
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (challenge.totpEnabled || challenge.backupEnabled) {
+                    if (challenge.backupEnabled) "输入验证器代码，或改用备用码。"
+                    else "输入验证器中的 6 位验证码。"
+                } else {
+                    "该账号仅启用了安全密钥，请在「使用其他方式登录」里完成验证。"
+                },
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            )
+
+            if (challenge.totpEnabled || challenge.backupEnabled) {
+                if (challenge.totpEnabled && challenge.backupEnabled) {
+                    TextButton(
+                        onClick = {
+                            useBackupCode = !useBackupCode
+                            code = ""
+                            error = null
+                        },
+                    ) {
+                        Text(
+                            if (useBackupCode) "改用验证器代码" else "改用备用码",
+                            fontSize = 12.sp,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.height(6.dp))
                 }
-            },
-            modifier = Modifier.fillMaxWidth().height(44.dp),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-            ),
-            enabled = !loading,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(if (useBackupCode) "备用码" else "6 位验证码", fontSize = 13.sp)
+                    },
+                    singleLine = true,
+                    keyboardOptions = if (useBackupCode) {
+                        KeyboardOptions(imeAction = ImeAction.Done)
+                    } else {
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done,
+                        )
+                    },
+                    shape = RoundedCornerShape(10.dp),
                 )
-            } else {
-                Text("登录", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        if (code.isBlank()) {
+                            error = "请输入验证码"
+                            return@Button
+                        }
+                        verifying = true
+                        error = null
+                        scope.launch {
+                            container.repository.loginWithSecondFactor(
+                                login = login,
+                                password = password,
+                                useBackupCode = useBackupCode || !challenge.totpEnabled,
+                                code = code,
+                            ).onSuccess { u ->
+                                verifying = false
+                                onLoggedIn(u)
+                            }.onFailure { e ->
+                                verifying = false
+                                error = e.message ?: "验证失败"
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    enabled = !verifying,
+                ) {
+                    if (verifying) {
+                        CircularProgressIndicator(
+                            Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text("验证并登录", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        secondFactor = null
+                        code = ""
+                        error = null
+                    },
+                    enabled = !verifying,
+                ) {
+                    Text("返回密码登录", fontSize = 12.5.sp)
+                }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HorizontalDivider(
+                Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            )
+            Text(
+                "或",
+                Modifier.padding(horizontal = 10.dp),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+            )
+            HorizontalDivider(
+                Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        TextButton(
+            onClick = { webLogin = true },
+            enabled = !loading && !verifying,
+        ) {
+            Text("使用其他方式登录", fontSize = 13.sp)
+        }
+        Text(
+            "支持站点自带的 OAuth / SSO / 两步验证等网页方式",
+            modifier = Modifier.fillMaxWidth(),
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        )
+    }
+
+    if (webLogin) {
+        WebLoginDialog(
+            baseUrl = container.sessionStore.baseUrl,
+            container = container,
+            onDismiss = { webLogin = false },
+            onLoggedIn = { u ->
+                webLogin = false
+                onLoggedIn(u)
+            },
+        )
     }
 }
 

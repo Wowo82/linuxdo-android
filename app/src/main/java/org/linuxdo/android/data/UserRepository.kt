@@ -19,6 +19,16 @@ import org.linuxdo.android.data.remote.DiscourseApi
 import java.net.URLEncoder
 
 /**
+ * 密码正确、但账号还差一步两步验证。
+ * UI 据此切换到验证码输入；安全密钥/Passkey 只能走网页登录。
+ */
+class SecondFactorRequiredException(
+    val totpEnabled: Boolean,
+    val backupEnabled: Boolean,
+    val securityKeyEnabled: Boolean,
+) : IllegalStateException("该账号启用了两步验证")
+
+/**
  * 业务仓库：把 DiscourseApi 的 JSON 变成 UI 能用的模型，并负责登录态维护。
  */
 class UserRepository(
@@ -80,25 +90,87 @@ class UserRepository(
     }
 
     suspend fun login(login: String, password: String): Result<User> = runCatching {
-        val raw = api.postForm(
-            "/session",
-            mapOf(
-                "login" to login.trim(),
-                "password" to password,
-                "second_factor_method" to "1",
-            ),
+        val parsed = postLogin(
+            login = login,
+            password = password,
+            secondFactorMethod = TOTP_METHOD,
+            secondFactorToken = null,
         )
-        val parsed: LoginResponse = json.decodeFromString(raw)
+        parsed.requireSuccess()
+        finishLogin()
+    }
+
+    /**
+     * 提交两步验证码（TOTP 或备用码）。
+     * Discourse 的本地登录是「带验证码重发同一个 POST /session」，不是单独端点。
+     */
+    suspend fun loginWithSecondFactor(
+        login: String,
+        password: String,
+        useBackupCode: Boolean,
+        code: String,
+    ): Result<User> = runCatching {
+        val parsed = postLogin(
+            login = login,
+            password = password,
+            secondFactorMethod = if (useBackupCode) BACKUP_CODE_METHOD else TOTP_METHOD,
+            secondFactorToken = code.trim(),
+        )
         if (!parsed.success) {
-            throw IllegalStateException(parsed.error ?: parsed.reason ?: "登录失败")
+            throw IllegalStateException(
+                when (parsed.reason) {
+                    "invalid_second_factor" -> "验证码不正确"
+                    "not_enabled_second_factor_method" -> "该账号未启用这种验证方式"
+                    else -> parsed.error ?: parsed.reason ?: "验证失败"
+                }
+            )
         }
+        finishLogin()
+    }
+
+    /** 网页登录完成、cookie 已同步进 jar 后调用：验证会话并补齐本地登录态 */
+    suspend fun completeWebLogin(): Result<User> = runCatching { finishLogin() }
+
+    private suspend fun postLogin(
+        login: String,
+        password: String,
+        secondFactorMethod: Int,
+        secondFactorToken: String?,
+    ): LoginResponse {
+        val form = buildMap {
+            put("login", login.trim())
+            put("password", password)
+            put("second_factor_method", secondFactorMethod.toString())
+            if (!secondFactorToken.isNullOrBlank()) {
+                put("second_factor_token", secondFactorToken)
+            }
+        }
+        return json.decodeFromString<LoginResponse>(api.postForm("/session", form))
+    }
+
+    private fun LoginResponse.requireSuccess() {
+        if (success) return
+        if (secondFactorRequired) {
+            // 老版本 Discourse 的失败响应可能只给 reason、不带 flags：
+            // 此时按最常见的 TOTP 处理，避免把用户直接推去网页登录
+            val hasFlags = totpEnabled || backupEnabled || securityKeyEnabled
+            throw SecondFactorRequiredException(
+                totpEnabled = if (hasFlags) totpEnabled else true,
+                backupEnabled = backupEnabled,
+                securityKeyEnabled = securityKeyEnabled,
+            )
+        }
+        throw IllegalStateException(error ?: reason ?: "登录失败")
+    }
+
+    private suspend fun finishLogin(): User {
         val session: SessionResponse = json.decodeFromString(api.getRaw("/session/current.json"))
         val u = session.currentUser ?: throw IllegalStateException("登录成功但拿不到用户信息")
         sessionStore.username = u.username
         sessionStore.userId = u.id
         // 登录后立刻取 CSRF token：不然第一次发帖 / 点赞会先吃一个 403 再重试
         refreshCsrfToken()
-        u
+        return u
     }
 
     suspend fun logout() {
@@ -317,5 +389,9 @@ class UserRepository(
     private companion object {
         /** 列表缓存上限 */
         const val MAX_CACHED_LISTS = 30
+
+        /** UserSecondFactor.methods：totp=1, backup_codes=2, security_key=3 */
+        const val TOTP_METHOD = 1
+        const val BACKUP_CODE_METHOD = 2
     }
 }

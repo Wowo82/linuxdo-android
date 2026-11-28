@@ -495,8 +495,16 @@ data class LoginResponse(
     val error: String? = null,
     val reason: String? = null,
     @SerialName("wait_seconds") val waitSeconds: Int? = null,
+    /** 2FA 账号在密码正确但还没提交验证码时会带这些标记 */
+    @SerialName("totp_enabled") val totpEnabled: Boolean = false,
+    @SerialName("backup_enabled") val backupEnabled: Boolean = false,
+    @SerialName("security_key_enabled") val securityKeyEnabled: Boolean = false,
 ) {
     val success: Boolean get() = error == null
+
+    val secondFactorRequired: Boolean
+        get() = totpEnabled || backupEnabled || securityKeyEnabled ||
+            reason == "invalid_second_factor" || reason == "invalid_second_factor_method"
 }
 
 @Serializable

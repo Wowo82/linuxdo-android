@@ -48,15 +48,22 @@ Cookie: _t=...
 ```
 login=<用户名或邮箱>
 password=<密码>
-second_factor_method=1
+second_factor_method=1          # 可选：1=TOTP，2=备用码
+second_factor_token=123456      # 2FA 账号必填
 ```
 
 失败返回 `{"error": "..."}` 或 `{"reason": "...", "wait_seconds": 5}`。
 
-**注意**：2FA 账号会返回 `{"error": "invalid_second_factor"}`，需要额外走
-`POST /session/2fa` 带 `second_factor_token`。当前未实现。
+**两步验证**：密码正确但还没提交验证码时，返回
+`{"error":"...","reason":"invalid_second_factor","totp_enabled":true,"backup_enabled":true,"security_key_enabled":false}`。
+把 `second_factor_method` 和 `second_factor_token` 一起**重新 POST `/session`** 即可。
+安全密钥 / Passkey 走「网页登录」。
 
-**代码**：`UserRepository.login()`
+**网页登录**：App 内置 WebView 打开 `{baseUrl}/login`，登录成功后把 CookieManager 里的 cookie
+同步进 OkHttp 的 cookie jar，再用 `/session/current.json` 验证。用于 OAuth / SSO / Passkey 等
+原生未接的方式。
+
+**代码**：`UserRepository.login()` / `loginWithSecondFactor()` / `completeWebLogin()`
 
 ### `DELETE /session/{username}`
 
@@ -549,7 +556,6 @@ raw=正文
 
 | 端点 | 用途 |
 |---|---|
-| `POST /session/2fa` | 两步验证登录 |
 | `GET /message-bus/{clientId}/poll` | 长轮询实时更新 |
 | `GET /mini-app-api/apps` | 微应用商店列表 |
 | `GET /review/queue.json` | 审核队列（仅版主） |
