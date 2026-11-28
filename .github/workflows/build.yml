@@ -76,6 +76,19 @@ jobs:
             echo "KEY_PASSWORD=$KEY_PASSWORD"
           } >> $GITHUB_ENV
 
+      # assembleDebug 不会跑单元测试，得单独跑；测试挂了就不继续出包
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Upload test reports on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build debug APK
         if: ${{ github.event.inputs.build_type != 'release' }}
         run: ./gradlew :app:assembleDebug --stacktrace
