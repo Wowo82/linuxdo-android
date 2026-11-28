@@ -113,24 +113,18 @@ Discourse 的会话是 `_t` cookie（HttpOnly，`document.cookie` 读不到）�
 `data/remote/Doh.kt` 实现了双路解析：
 
 ```kotlin
-primary  = https://223.5.5.5/dns-query   // bootstrapDnsHosts 用 IP 直连，避免自解析
-fallback = https://dns.google/dns-query
+primary  = https://linuxdo.ddd.oaifree.com/query-dns   // 始皇，子域可任意替换
+fallback = https://edge.1molchuan.top/linuxdo          // 1mol氚
 ```
 
-**当前未挂载**。启用方式：
+已挂载到 `HttpClients.base`（`.dns(Doh.dns())`）。
 
-```kotlin
-// HttpClients.kt
-private val base: OkHttpClient by lazy {
-    OkHttpClient.Builder()
-        .dns(Doh.dns())   // ← 加这一行
-        ...
-}
-```
+**作用域**：只有 `linux.do` 与 `*.linux.do` 走 DoH；自建站点、图片 CDN
+仍用系统 DNS，避免把别人的解析也劫持了。两路 DoH 都失败时回落
+`Dns.SYSTEM`，不会因为 DoH 不可用导致 App 断网。
 
-**为什么默认关**：DoH 会让所有请求绕开系统 DNS。
-在企业内网、强制代理、或 DNS 已经正确的环境下反而增加延迟。
-只在确认被污染时开。
+DoH 客户端本身用系统 DNS 解析 `ddd.oaifree.com` / `1molchuan.top`，
+超时各 5s。
 
 ---
 

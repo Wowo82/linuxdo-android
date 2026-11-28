@@ -53,6 +53,7 @@ android {
 | 模块 | iOS 版 | 本实现 |
 |---|---|---|
 | 话题列表 | latest / hot / new / unread / top + 周期筛选 | ✅ 同构，含分类维度 |
+| 版块 | 分类列表 + 子版块 | ✅ 底部「版块」页，可进入分类话题流 |
 | 话题详情 | 楼层流、回复、点赞、收藏、编辑 | ✅ 回复 / 点赞（乐观更新）/ 收藏 |
 | 发帖 | 标题 + 分类 + Markdown 正文 | ✅ |
 | 搜索 | 全文 + 用户 + 分类 | ✅ 300ms 防抖、历史记录 |
@@ -83,11 +84,11 @@ app/src/main/java/org/linuxdo/android/
 │     ├─ DiscourseApi.kt    HTTP 封装（GET/POST/PUT/DELETE/上传）
 │     ├─ HeaderInterceptor.kt  Discourse 必需请求头
 │     ├─ HttpClients.kt     按站点缓存的 OkHttpClient
-│     └─ Doh.kt             DoH 解析器（阿里 + Google 双路）
+│     └─ Doh.kt             DoH 解析器（始皇 + 1mol氚双路）
 ├─ ui/
 │  ├─ MainScreen.kt         Scaffold + 底部导航 + FAB
 │  ├─ MainViewModel.kt      站点信息 / 当前用户 / 未读角标
-│  ├─ browse/FeedScreen    话题列表（Tab 筛选 + 下拉刷新 + 无限滚动）
+│  ├─ browse/              话题列表（FeedScreen）+ 版块页（CategoriesScreen）
 │  ├─ topic/                详情 + 发帖
 │  ├─ search/               搜索
 │  ├─ notifications/        通知
@@ -116,11 +117,15 @@ Discourse 的会话是 `_t` cookie（HttpOnly）。iOS 版额外叠了 App Attes
 
 cookie 存 `EncryptedSharedPreferences`（AES256-GCM），key 由 Android Keystore 托管。
 
-**3. DoH 默认关闭，配置保留**
+**3. DoH 只接管 linux.do**
 
-`Doh.kt` 实现了阿里 / Google 双路 DoH。当前没有挂到 OkHttpClient 上——
-因为 DoH 会让所有请求绕开系统 DNS，在部分企业网络下反而变慢或失败。
-需要时在 `HttpClients.base` 加一行 `.dns(Doh.dns())` 即可启用。
+`Doh.kt` 内置两路 Linux DO 专用 DoH，已挂到 `HttpClients.base`：
+
+- 始皇：`https://<任意子域>.ddd.oaifree.com/query-dns`
+- 1mol氚：`https://edge.1molchuan.top/linuxdo`
+
+仅当目标主机是 `linux.do` / `*.linux.do` 时走 DoH；两路都失败回落系统 DNS，
+自建站点与图片 CDN 不受影响。
 
 **4. 分页用 post_number 而不是 page**
 

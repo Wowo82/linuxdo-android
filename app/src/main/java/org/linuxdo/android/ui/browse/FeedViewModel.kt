@@ -30,9 +30,13 @@ data class FeedState(
 /**
  * 话题列表 ViewModel。每个 Tab 持有一个实例，各自保存自己的筛选状态。
  */
-class FeedViewModel(private val repo: UserRepository) : ViewModel() {
+class FeedViewModel(
+    private val repo: UserRepository,
+    initialCategoryId: Long? = null,
+    private val categorySlug: String? = null,
+) : ViewModel() {
 
-    private val _state = MutableStateFlow(FeedState())
+    private val _state = MutableStateFlow(FeedState(categoryId = initialCategoryId))
     val state: StateFlow<FeedState> = _state.asStateFlow()
 
     private var categoriesLoaded = false
@@ -78,6 +82,7 @@ class FeedViewModel(private val repo: UserRepository) : ViewModel() {
                     filter = s.filter,
                     page = s.page + 1,
                     categoryId = s.categoryId,
+                    categorySlug = categorySlug,
                     period = s.period,
                 )
             }.onSuccess { resp ->
@@ -120,6 +125,7 @@ class FeedViewModel(private val repo: UserRepository) : ViewModel() {
                     filter = s.filter,
                     page = 0,
                     categoryId = s.categoryId,
+                    categorySlug = categorySlug,
                     period = s.period,
                     forceReload = refresh,
                 )
@@ -151,7 +157,7 @@ class FeedViewModel(private val repo: UserRepository) : ViewModel() {
 
 internal fun Throwable.friendly(): String = when (this) {
     is org.linuxdo.android.data.remote.ApiException -> when (kind) {
-        org.linuxdo.android.data.remote.ApiException.Kind.NETWORK -> "网络连接失败，检查网络或试试关闭 DoH"
+        org.linuxdo.android.data.remote.ApiException.Kind.NETWORK -> "网络连接失败，检查网络或服务器地址"
         org.linuxdo.android.data.remote.ApiException.Kind.AUTH -> "需要登录后才能查看"
         org.linuxdo.android.data.remote.ApiException.Kind.RATE_LIMIT -> "请求太频繁，稍后再试"
         org.linuxdo.android.data.remote.ApiException.Kind.SERVER -> "服务器出错了"

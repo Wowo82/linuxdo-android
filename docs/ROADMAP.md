@@ -72,13 +72,10 @@ POST /uploads.json  (multipart: file, type=composer)
 
 ## P1 — 功能补齐
 
-### 4. 分类浏览页
+### 4. 分类浏览页（已完成）
 
-`FeedViewModel` 支持 `categoryId`，但没有 UI 去选分类。
-`ProfileScreen` 之外需要一个「分类」入口。
-
-**方案**：底部导航加第五个 tab，或做成列表页顶部的下拉。
-展示 `CategoryList` 的树形结构（`parent_category_id` + `subcategory_ids`）。
+底部导航新增「版块」tab：`/categories.json?include_subcategories=true`
+展示顶级分类 + 子版块，点击进入 `/c/{slug}/{id}/l/{filter}.json` 的分类话题流。
 
 ### 5. 私信（PM）
 
@@ -208,9 +205,9 @@ curl -sS 'https://linux.do/mini-app-api/apps' \
 | `ui/browse/ComposeShims.kt` | 只是 `collectAsState` 的包装，纯噪音 | 可删，直接 import |
 | `ui/MainScreen.kt:176` | `simpleFactory` 定义在 UI 文件里 | 应移到 `ui/common/` |
 | ~~`HttpClients`~~ | ~~`invalidate()` 没人调用~~ | 已修：`changeServer` 走 `container.onSiteChanged()` |
-| `Doh.kt` | 已实现但未挂载 | 需要时手动改 `HttpClients.base` |
+| `Doh.kt` | 已挂载，仅处理 `linux.do` / `*.linux.do` | 双路都失败时回落系统 DNS；端点依赖第三方域名 |
 | `util/Html.isCjkDominant()` | 没人用 | 删除或接入排版判断 |
-| ~~全项目~~ | ~~零单元测试~~ | 已补：Html / TopicLink / SiteUrl / CSRF 四组 |
+| ~~全项目~~ | ~~零单元测试~~ | 已补：Html / TopicLink / SiteUrl / CSRF / 分类解析五组 |
 | `DraftStore.allKeys()` | 没人用 | 草稿列表 UI 才需要 |
 
 ---

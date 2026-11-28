@@ -251,7 +251,8 @@ Android Studio 的 Layout Inspector → 勾选 "Show recomposition counts"。
 
 1. 先在浏览器打开 `https://linux.do` 确认网络通
 2. 换 WiFi / 切流量，排除 DNS 污染
-3. 试 `Doh.dns()`（见 `docs/ARCHITECTURE.md` 的 DoH 章节）
+3. DoH 已默认挂载（始皇 / 1mol氚，见 `docs/ARCHITECTURE.md`）；确认两个 DoH 域名可达，
+   或在 `HttpClients.base` 临时去掉 `.dns(Doh.dns())` 复测
 4. 检查是不是 VPN 走了奇怪的路由
 
 ### 登录 403

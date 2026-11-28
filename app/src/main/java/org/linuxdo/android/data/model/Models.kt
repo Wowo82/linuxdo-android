@@ -203,6 +203,11 @@ data class Poster(
 }
 
 @Serializable
+data class CategoriesResponse(
+    @SerialName("category_list") val categoryList: CategoryList = CategoryList(),
+)
+
+@Serializable
 data class CategoryList(
     @SerialName("can_create_topic") val canCreateTopic: Boolean = false,
     @SerialName("can_create_category") val canCreateCategory: Boolean = false,
@@ -228,6 +233,8 @@ data class Category(
     @SerialName("read_restricted") val readRestricted: Boolean = false,
     @SerialName("has_children") val hasChildren: Boolean? = null,
     @SerialName("subcategory_ids") val subcategoryIds: List<Long> = emptyList(),
+    /** categories.json?include_subcategories=true 时，父分类会带完整子分类 */
+    @SerialName("subcategory_list") val subcategoryList: List<Category>? = null,
     @SerialName("uploaded_logo") val uploadedLogo: MediaObject? = null,
     val colorScheme: String? = null,
 )
