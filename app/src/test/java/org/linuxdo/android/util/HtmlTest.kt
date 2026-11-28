@@ -18,6 +18,8 @@ class HtmlTest {
         assertEquals("", Html.unescape("&#1114112;"))
         assertEquals("", Html.unescape("&#9999999;"))
         assertEquals("", Html.unescape("&#x110000;"))
+        // 7 位十六进制：toIntOrNull(16) 能解出来但远超 0x10FFFF
+        assertEquals("", Html.unescape("&#x10FFFFF;"))
     }
 
     @Test
