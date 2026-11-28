@@ -146,7 +146,9 @@ class DiscourseApi(
         val (body, code, message) = await(sent)
         if (code in 200..299) return body
 
-        if (code == 403 && isWrite && allowCsrfRetry) {
+        // 只有「看起来是 CSRF 失败」的 403 才去换 token；
+        // 普通无权限 / 被封禁的 403 重试没有意义，反而多打一次 csrf 接口
+        if (code == 403 && isWrite && allowCsrfRetry && looksLikeCsrfFailure(body)) {
             val before = csrfProvider()
             val fresh = refreshCsrf()
             if (!fresh.isNullOrBlank() && fresh != before) {
