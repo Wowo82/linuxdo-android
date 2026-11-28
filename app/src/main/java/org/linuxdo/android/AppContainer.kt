@@ -27,11 +27,24 @@ class AppContainer(context: Context) {
 
     val api: DiscourseApi = DiscourseApi(
         baseUrlProvider = { sessionStore.baseUrl },
-        clientProvider = { HttpClients.forSite(sessionStore.baseUrl, sessionStore.cookieJar) },
+        clientProvider = {
+            HttpClients.forSite(
+                baseUrl = sessionStore.baseUrl,
+                cookieJar = sessionStore.cookieJar,
+                csrfTokens = sessionStore.csrfTokens,
+            )
+        },
+        csrfProvider = { sessionStore.csrfTokens.current() },
+        csrfPersist = { token -> sessionStore.csrfTokens.update(token) },
     )
 
     val repository: UserRepository = UserRepository(api = api, sessionStore = sessionStore)
 
     val draftStore: DraftStore = DraftStore(context.applicationContext)
     val searchHistoryStore: SearchHistoryStore = SearchHistoryStore(context.applicationContext)
+
+    /** 切换站点后要丢掉按 baseUrl 缓存的 client（Origin/Referer + CSRF 都是按站点算的） */
+    fun onSiteChanged() {
+        HttpClients.invalidate()
+    }
 }

@@ -54,7 +54,7 @@ import org.linuxdo.android.ui.theme.CategoryChip
 import org.linuxdo.android.ui.theme.parseHexColor
 import org.linuxdo.android.util.Html
 import org.linuxdo.android.util.TimeFmt
-import org.linuxdo.android.util.absolutize
+import org.linuxdo.android.ui.common.absoluteImageUrl
 import org.linuxdo.android.util.shortCount
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -254,7 +254,7 @@ private fun TopicRow(
                 topic.bestThumb?.let { img ->
                     Spacer(Modifier.width(10.dp))
                     AsyncImage(
-                        model = absolutize(img),
+                        model = absoluteImageUrl(img),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),

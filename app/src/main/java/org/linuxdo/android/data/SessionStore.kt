@@ -5,13 +5,15 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import okhttp3.Cookie
+import org.linuxdo.android.data.remote.CsrfTokens
 import org.linuxdo.android.data.remote.PersistentCookieJar
 
 /**
- * 站点地址 + 登录态（cookie）持久化。
+ * 站点地址 + 登录态（cookie + CSRF token）持久化。
  *
- * cookie 里含 `_t` 会话令牌，所以落到 EncryptedSharedPreferences；
- * 只有 cookie jar 初始化前会同步读一次。
+ * cookie 里含 `_t` 会话令牌，CSRF token 能直接代替会话发起写操作，
+ * 两者都落到 EncryptedSharedPreferences；
+ * 只有 cookie jar / csrf 缓存初始化前会同步读一次。
  */
 class SessionStore(context: Context) {
 
@@ -68,9 +70,22 @@ class SessionStore(context: Context) {
         )
     }
 
+    // ---------- CSRF ----------
+
+    val csrfTokens: CsrfTokens by lazy {
+        CsrfTokens(
+            load = { secure.getString(KEY_CSRF, null) },
+            save = { token ->
+                if (token == null) secure.edit().remove(KEY_CSRF).apply()
+                else secure.edit().putString(KEY_CSRF, token).apply()
+            },
+        )
+    }
+
     fun clearCookies() {
         cookieJar.clear()
-        secure.edit().remove(KEY_COOKIES).apply()
+        csrfTokens.clear()
+        secure.edit().remove(KEY_COOKIES).remove(KEY_CSRF).apply()
         plain.edit().remove(KEY_USERNAME).remove(KEY_USER_ID).apply()
     }
 
@@ -108,5 +123,6 @@ class SessionStore(context: Context) {
         const val KEY_SITE_TITLE = "site_title"
         const val KEY_SITE_ICON = "site_icon"
         const val KEY_COOKIES = "cookies_v1"
+        const val KEY_CSRF = "csrf_v1"
     }
 }

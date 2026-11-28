@@ -70,8 +70,7 @@ import org.linuxdo.android.ui.theme.AvatarFallback
 import org.linuxdo.android.ui.theme.CategoryChip
 import org.linuxdo.android.ui.theme.defaultCategoryColor
 import org.linuxdo.android.util.TimeFmt
-import org.linuxdo.android.util.absolutize
-import org.linuxdo.android.util.avatarUrl
+import org.linuxdo.android.ui.common.avatarUrlOf
 import org.linuxdo.android.util.shortCount
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,16 +78,32 @@ import org.linuxdo.android.util.shortCount
 fun TopicDetailScreen(
     topicId: Long,
     container: AppContainer,
+    initialPostNumber: Int? = null,
     onBack: () -> Unit,
 ) {
     val vm: TopicDetailViewModel = viewModel(
-        key = "topic_$topicId",
-        factory = simpleFactory { TopicDetailViewModel(container.repository, topicId) },
+        key = "topic_${topicId}_${initialPostNumber ?: 0}",
+        factory = simpleFactory {
+            TopicDetailViewModel(container.repository, topicId, initialPostNumber)
+        },
     )
     val state by vm.state.collectState()
     val listState = rememberLazyListState()
     var draft by remember { mutableStateOf("") }
     var showComposer by remember { mutableStateOf(false) }
+    var jumped by remember { mutableStateOf(false) }
+
+    // 深链带楼层号：数据到位后滚到那一楼（只跳一次）
+    LaunchedEffect(state.posts, state.jumping) {
+        val target = initialPostNumber ?: return@LaunchedEffect
+        if (jumped || state.jumping || state.posts.isEmpty()) return@LaunchedEffect
+        val index = state.posts.indexOfFirst { it.postNumber >= target }
+        if (index >= 0) {
+            // +1 是顶部的 header item
+            listState.scrollToItem(index + 1)
+            jumped = true
+        }
+    }
 
     LaunchedEffect(listState) {
         snapshotOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
@@ -395,7 +410,7 @@ private fun PostCard(
 
 @Composable
 private fun Avatar(post: Post) {
-    val url = avatarUrl(post.avatarTemplate, 96)
+    val url = avatarUrlOf(post.avatarTemplate, 96)
     Box(Modifier.size(34.dp)) {
         AvatarFallback(name = post.displayName, size = 34)
         if (url != null) {

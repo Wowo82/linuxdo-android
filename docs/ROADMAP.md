@@ -187,17 +187,31 @@ curl -sS 'https://linux.do/mini-app-api/apps' \
 
 ---
 
+## 已完成（本轮）
+
+- **CSRF**：写操作带 `X-CSRF-Token`，403 刷新后单次重放，token 落加密盘。
+  原来发帖 / 回复 / 点赞全 403 `Invalid Authenticity Token`。
+- **站点地址参数化**：`avatarUrl` / `absolutize` 不再写死 `https://linux.do`，
+  自建 Discourse 的头像与正文图片跟着「服务器地址」走（含反向代理子路径）。
+- **深链**：`/t/{slug}/{id}/{post}` 真正打开详情页并滚到指定楼层，
+  解析放在 `util/TopicLink.kt`，纯字符串实现可单测。
+- **实体解码顺序**：数字实体先于 `&amp;` 解码，越界码点丢空而非抛异常；
+  双重转义 `&amp;#1114112;` 不再崩列表页。
+- **列表缓存**：`ConcurrentHashMap` 换成有上限的 LRU + 锁。
+- **切站点**：`HttpClients.invalidate()` 接上，旧 client 不再残留。
+- **单元测试**：四组 JVM 测试，`./gradlew :app:testDebugUnitTest`。
+
 ## 技术债
 
 | 位置 | 问题 | 影响 |
 |---|---|---|
 | `ui/browse/ComposeShims.kt` | 只是 `collectAsState` 的包装，纯噪音 | 可删，直接 import |
 | `ui/MainScreen.kt:176` | `simpleFactory` 定义在 UI 文件里 | 应移到 `ui/common/` |
-| `HttpClients` | `invalidate()` 没人调用 | 切站点后旧客户端仍在 map 里 |
+| ~~`HttpClients`~~ | ~~`invalidate()` 没人调用~~ | 已修：`changeServer` 走 `container.onSiteChanged()` |
 | `Doh.kt` | 已实现但未挂载 | 需要时手动改 `HttpClients.base` |
 | `util/Html.isCjkDominant()` | 没人用 | 删除或接入排版判断 |
+| ~~全项目~~ | ~~零单元测试~~ | 已补：Html / TopicLink / SiteUrl / CSRF 四组 |
 | `DraftStore.allKeys()` | 没人用 | 草稿列表 UI 才需要 |
-| 全项目 | 零单元测试 | 至少 `Html.toPlain` / `TimeFmt` 该有 |
 
 ---
 

@@ -54,7 +54,7 @@ import org.linuxdo.android.AppContainer
 import org.linuxdo.android.data.model.User
 import org.linuxdo.android.ui.theme.AvatarFallback
 import org.linuxdo.android.util.TimeFmt
-import org.linuxdo.android.util.avatarUrl
+import org.linuxdo.android.ui.common.avatarUrlOf
 
 /**
  * 「我的」页：未登录时显示登录表单；已登录显示资料 + 设置项。
@@ -235,7 +235,7 @@ private fun LoginCard(
 private fun ProfileCard(user: User) {
     Column(Modifier.fillMaxWidth().padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val url = avatarUrl(user.avatarTemplate, 192)
+            val url = avatarUrlOf(user.avatarTemplate, 192)
             Box(Modifier.size(56.dp)) {
                 AvatarFallback(name = user.displayName, size = 56)
                 if (url != null) {

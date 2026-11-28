@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,10 +56,22 @@ fun MainScreen(
     vm: MainViewModel,
     state: MainState,
     container: AppContainer,
+    deepLinkTopicId: Long? = null,
+    deepLinkPostNumber: Int? = null,
+    onDeepLinkConsumed: () -> Unit = {},
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var openTopicId by remember { mutableStateOf<Long?>(null) }
+    var openPostNumber by remember { mutableStateOf<Int?>(null) }
     var composing by remember { mutableStateOf(false) }
+
+    // 外部链接进来：直接打开对应话题，并停在指定楼层
+    LaunchedEffect(deepLinkTopicId, deepLinkPostNumber) {
+        val id = deepLinkTopicId ?: return@LaunchedEffect
+        openTopicId = id
+        openPostNumber = deepLinkPostNumber
+        onDeepLinkConsumed()
+    }
 
     val feedVm: FeedViewModel = viewModel(
         key = "feed",
@@ -77,7 +90,11 @@ fun MainScreen(
         TopicDetailScreen(
             topicId = openTopicId!!,
             container = container,
-            onBack = { openTopicId = null },
+            initialPostNumber = openPostNumber,
+            onBack = {
+                openTopicId = null
+                openPostNumber = null
+            },
         )
         return
     }

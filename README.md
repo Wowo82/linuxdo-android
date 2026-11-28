@@ -160,6 +160,25 @@ Discourse 的话题帖子流是稀疏的：`topic.json` 只给前 20 楼 + 全�
 - 上传附件接口已封装（`DiscourseApi.uploadFile`）但发帖 UI 未接
 - 未实现私信（PM）、聊天（Chat 插件）、审核队列
 - 没有离线缓存正文，断网只能看列表缓存
+- 自建站点目前只支持 https（`usesCleartextTraffic=false`）
+
+## 写操作与 CSRF
+
+Discourse 对 browser session 的**非 GET** 请求强制校验 `X-CSRF-Token`，
+只带 cookie + `X-Requested-With` 不豁免。实现方式：
+
+1. 登录成功后 `GET /session/csrf.json` 取 token，和 cookie 一起存进
+   EncryptedSharedPreferences；
+2. `HeaderInterceptor` 对写请求补 `X-CSRF-Token`（读请求不加）；
+3. 写请求收到 403 且响应里像 CSRF 失败时，刷新 token 后**重放一次**，
+   token 没变化则不重放，避免死循环；
+4. 普通无权限的 403 归为 `ApiException.Kind.AUTH`，不会误判成 CSRF。
+
+## 深链
+
+`https://linux.do/t/{slug}/{id}/{post}` 由 `util/TopicLink.kt` 解析后，
+直接打开详情页并滚到指定楼层。解析是纯字符串实现，方便单测。
+
 
 ---
 

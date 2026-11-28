@@ -79,6 +79,14 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // 单元测试跑在 JVM 上，android.os.Build 之类只能拿到默认值；
+            // 不开这个开关，访问 stub 里的 android API 会直接抛 "not mocked"。
+            isReturnDefaultValues = true
+        }
+    }
+
     packaging {
         resources.excludes += setOf(
             "/META-INF/{AL2.0,LGPL2.1}",
@@ -130,5 +138,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

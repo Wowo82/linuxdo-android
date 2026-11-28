@@ -265,34 +265,32 @@ Discourse 登录需要 CSRF 保护。确认：
 
 ## 测试
 
-当前**零测试**。最低要求：
+已有三组 JVM 单元测试（`app/src/test/`），全部跑在 JVM 上，不需要模拟器：
 
-```kotlin
-// app/src/test/java/org/linuxdo/android/util/TimeFmtTest.kt
-class TimeFmtTest {
-    @Test fun relative_minutes() {
-        val iso = java.time.Instant.now().minusSeconds(300).toString()
-        assertEquals("5 分钟前", TimeFmt.relative(iso))
-    }
-}
-
-// HtmlTest.kt
-class HtmlTest {
-    @Test fun toPlain_stripsTags() {
-        assertEquals("hello world", Html.toPlain("<p>hello <b>world</b></p>"))
-    }
-
-    @Test fun toPlain_unescapes() {
-        assertEquals("a & b", Html.toPlain("a &amp; b"))
-    }
-}
-```
-
-跑测试：
+| 文件 | 覆盖 |
+|---|---|
+| `util/HtmlTest.kt` | 实体解码、越界码点、双重转义、`toPlain` 摘要 |
+| `util/TopicLinkTest.kt` | 深链 `/t/slug/12345/7` 各种形态与拒绝规则 |
+| `util/SiteUrlTest.kt` | 头像 / 图片地址跟随站点（含反向代理子路径） |
+| `data/remote/CsrfTest.kt` | CSRF 头注入、403 刷新后单次重放、不误判普通 403 |
 
 ```bash
-./gradlew :app:testDebugUnitTest
+./gradlew :app:testDebugUnitTest          # 全部单元测试
+./gradlew :app:testDebugUnitTest --tests 'org.linuxdo.android.util.HtmlTest'
 ```
 
-Compose UI 测试需要 `androidTestImplementation("androidx.compose.ui:ui-test-junit4")`，
-当前未加依赖。
+`android { testOptions { unitTests { isReturnDefaultValues = true } } }` 是必须的：
+`HeaderInterceptor` 会读 `android.os.Build`，不开启时 JVM 测试里访问会抛 "not mocked"。
+
+### 写测试的约定
+
+- 纯逻辑（`util/`、`data/model/`）直接测，不要引入 Android 依赖；
+  需要 `android.net.Uri` 之类的地方改成纯字符串实现（参考 `TopicLink`）。
+- 网络层用 `MockWebServer` 断言**真实发出的请求**，而不是 mock 掉 `DiscourseApi`——
+  CSRF 这类问题只有看实际请求头才能发现。
+- 不要在测试里写真实 cookie / token；需要时用 `"TOKEN_A"` 这类明显假值。
+
+### 已知未覆盖
+
+- UI 层（Compose）没有测试，需要 `androidTestImplementation("androidx.compose.ui:ui-test-junit4")`。
+- `UserRepository` 的缓存淘汰、`PersistentCookieJar` 的落盘时机没有测试。

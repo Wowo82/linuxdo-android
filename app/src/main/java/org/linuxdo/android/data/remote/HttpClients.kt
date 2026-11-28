@@ -26,13 +26,14 @@ object HttpClients {
 
     private val cache = ConcurrentHashMap<String, OkHttpClient>()
 
-    fun forSite(baseUrl: String, cookieJar: CookieJar): OkHttpClient =
+    fun forSite(baseUrl: String, cookieJar: CookieJar, csrfTokens: CsrfTokens): OkHttpClient =
         cache.getOrPut(baseUrl) {
             base.newBuilder()
                 .cookieJar(cookieJar)
-                .addInterceptor(HeaderInterceptor(baseUrl))
+                .addInterceptor(HeaderInterceptor(baseUrl, csrfTokens))
                 .build()
         }
 
+    /** 切站点后必须调用，否则旧站点的 Origin/Referer 与 CSRF 缓存会跟着复用 */
     fun invalidate() = cache.clear()
 }

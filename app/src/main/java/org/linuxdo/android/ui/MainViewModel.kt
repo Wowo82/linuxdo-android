@@ -13,6 +13,8 @@ import org.linuxdo.android.data.model.User
 
 data class MainState(
     val booting: Boolean = true,
+    /** 当前站点地址：头像 / 图片绝对化都要用它，跟着「服务器地址」变 */
+    val baseUrl: String = "",
     val siteTitle: String = "LINUX DO",
     val siteIcon: String? = null,
     val user: User? = null,
@@ -25,7 +27,7 @@ data class MainState(
  */
 class MainViewModel(private val container: AppContainer) : ViewModel() {
 
-    private val _state = MutableStateFlow(MainState())
+    private val _state = MutableStateFlow(MainState(baseUrl = container.sessionStore.baseUrl))
     val state: StateFlow<MainState> = _state.asStateFlow()
 
     private val repo get() = container.repository
@@ -39,6 +41,10 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val info = runCatching { repo.siteBasicInfo() }.getOrNull()
             val user = repo.currentUserOrNull()
+            // 已登录但本地没存 CSRF token（老版本升级上来 / 被清过）时补一次
+            if (user != null && container.sessionStore.csrfTokens.current() == null) {
+                repo.refreshCsrfToken()
+            }
             val unread = runCatching {
                 repo.refreshSession().allUnreadNotificationsCount
             }.getOrDefault(0)
@@ -46,6 +52,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             _state.update {
                 it.copy(
                     booting = false,
+                    baseUrl = container.sessionStore.baseUrl,
                     siteTitle = info?.title ?: "LINUX DO",
                     siteIcon = info?.logoSmallUrl ?: info?.appleTouchIconUrl ?: info?.faviconUrl,
                     user = user,
@@ -79,6 +86,8 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.sessionStore.baseUrl = url.trimEnd('/')
             container.sessionStore.clearCookies()
+            // 丢掉落盘 cookie 后必须重建 client：Origin/Referer 与 CSRF 都是按站点算的
+            container.onSiteChanged()
             repo.invalidateLists()
             _state.update { it.copy(booting = true, user = null) }
             val ok = runCatching { repo.siteBasicInfo() }.isSuccess

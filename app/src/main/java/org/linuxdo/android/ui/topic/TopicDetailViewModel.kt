@@ -25,6 +25,8 @@ data class TopicState(
     val sendError: String? = null,
     val replyTo: Post? = null,
     val bookmarking: Boolean = false,
+    /** 正在按楼层号定位（深链 / 跳楼），期间不要重复触发滚动 */
+    val jumping: Boolean = false,
 ) {
     fun likedOf(post: Post): Boolean =
         interactions[post.id]?.liked ?: post.liked
@@ -38,10 +40,12 @@ data class TopicState(
  *
  * topic.json 只返回前 20 楼 + stream（全部 post id）。
  * 往下滑到底时按 postNumber 继续拉 /t/{id}.json?post_number=N。
+ * 外部链接带楼层号时（`/t/slug/123/7`）首次加载就从第 7 楼开始取。
  */
 class TopicDetailViewModel(
     private val repo: UserRepository,
     private val topicId: Long,
+    private val initialPostNumber: Int? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TopicState())
@@ -51,13 +55,20 @@ class TopicDetailViewModel(
     private var loadingMore = false
 
     init {
-        load()
+        load(initialPostNumber)
     }
 
-    fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+    fun load(fromPostNumber: Int? = null) {
+        _state.update { it.copy(loading = true, error = null, jumping = fromPostNumber != null) }
         viewModelScope.launch {
-            runCatching { repo.topic(topicId) }
+            // 带楼层号时直接用 post_number 取那一段，省掉「先拉第 1 页再补」
+            val fetch = if (fromPostNumber != null) {
+                runCatching { repo.postsNear(topicId, fromPostNumber) }
+                    .recoverCatching { repo.topic(topicId) }
+            } else {
+                runCatching { repo.topic(topicId) }
+            }
+            fetch
                 .onSuccess { detail ->
                     loadedPostIds.clear()
                     detail.postStream.posts.forEach { loadedPostIds.add(it.id) }
@@ -67,11 +78,14 @@ class TopicDetailViewModel(
                             posts = detail.postStream.posts.sortedBy { p -> p.postNumber },
                             loading = false,
                             error = null,
+                            jumping = false,
                         )
                     }
                 }
                 .onFailure { e ->
-                    _state.update { it.copy(loading = false, error = e.friendlyMessage()) }
+                    _state.update {
+                        it.copy(loading = false, error = e.friendlyMessage(), jumping = false)
+                    }
                 }
         }
     }

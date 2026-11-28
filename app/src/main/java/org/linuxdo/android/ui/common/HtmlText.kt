@@ -34,13 +34,15 @@ fun HtmlContent(
     if (html.isNullOrBlank()) return
     val context = LocalContext.current
     val body = remember(html) {
-        // <img> 在 TextView 里显示不了，先剥掉，避免留下一堆空白
+        // <img> 在 TextView 里显示不了，先剥掉，避免留下一堆空白。
+        // 注意不要在这里预解实体：HtmlCompat 自己会解，提前把 &amp;lt; 变成 &lt;
+        // 会显示成真正的 "<"，等于双重转义。
         val stripped = html
             .replace(Regex("(?is)<img[^>]*>"), "")
             .replace(Regex("(?is)<video[^>]*>.*?</video>"), "[视频]")
             .replace(Regex("(?is)<iframe[^>]*>.*?</iframe>"), "[嵌入内容]")
             .replace(Regex("(?is)<pre[^>]*>"), "<pre>")
-        HtmlCompat.fromHtml(unescapeAll(stripped), HtmlCompat.FROM_HTML_MODE_COMPACT)
+        HtmlCompat.fromHtml(stripped, HtmlCompat.FROM_HTML_MODE_COMPACT)
     }
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
@@ -92,8 +94,3 @@ fun CollapsibleHtml(
         }
     }
 }
-
-private fun unescapeAll(html: String): String =
-    html.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")

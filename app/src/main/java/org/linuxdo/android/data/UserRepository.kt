@@ -17,7 +17,6 @@ import org.linuxdo.android.data.model.UserDetailResponse
 import org.linuxdo.android.data.remote.ApiException
 import org.linuxdo.android.data.remote.DiscourseApi
 import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 业务仓库：把 DiscourseApi 的 JSON 变成 UI 能用的模型，并负责登录态维护。
@@ -28,8 +27,32 @@ class UserRepository(
 ) {
     private val json = api.json
 
-    /** 列表页内存缓存，key 见 listCacheKey() */
-    private val topicCache = ConcurrentHashMap<String, TopicListResponse>()
+    /**
+     * 列表页内存缓存，key 见 listCacheKey()。
+     * 用 LRU 封顶：无限滚动 + 多 filter/分类/周期组合会让 key 无上限增长，
+     * 长时间刷列表内存只涨不降。
+     */
+    private val topicCache = object : LinkedHashMap<String, TopicListResponse>(
+        /* initialCapacity = */ 32,
+        /* loadFactor = */ 0.75f,
+        /* accessOrder = */ true,
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TopicListResponse>?): Boolean =
+            size > MAX_CACHED_LISTS
+    }
+
+    /** 缓存条数上限见 MAX_CACHED_LISTS；LRU 的读写都要进这把锁 */
+    private val cacheLock = Any()
+
+    /**
+     * 刷新 CSRF token：登录后、切站点后、老版本升级上来的首次启动都会用到。
+     * 实现在 [DiscourseApi.refreshCsrf]（GET，不会触发写操作的 403 重试分支）。
+     */
+    suspend fun refreshCsrfToken(): String? {
+        val token = api.refreshCsrf() ?: return null
+        sessionStore.csrfTokens.update(token)
+        return token
+    }
 
     // ============================================================
     // 会话 / 站点
@@ -73,13 +96,15 @@ class UserRepository(
         val u = session.currentUser ?: throw IllegalStateException("登录成功但拿不到用户信息")
         sessionStore.username = u.username
         sessionStore.userId = u.id
+        // 登录后立刻取 CSRF token：不然第一次发帖 / 点赞会先吃一个 403 再重试
+        refreshCsrfToken()
         u
     }
 
     suspend fun logout() {
         sessionStore.username?.let { runCatching { api.deleteForm("/session/$it") } }
         sessionStore.clearCookies()
-        topicCache.clear()
+        invalidateLists()
     }
 
     // ============================================================
@@ -112,7 +137,7 @@ class UserRepository(
         forceReload: Boolean = false,
     ): TopicListResponse {
         val key = listCacheKey(filter, page, categoryId, period)
-        if (!forceReload) topicCache[key]?.let { return it }
+        if (!forceReload) cachedList(key)?.let { return it }
 
         val path = buildString {
             append('/')
@@ -130,11 +155,14 @@ class UserRepository(
             if (categoryId != null) put("category_id", categoryId.toString())
         }
         val resp: TopicListResponse = json.decodeFromString(api.getRaw(path, params))
-        topicCache[key] = resp
+        synchronized(cacheLock) { topicCache[key] = resp }
         return resp
     }
 
-    fun invalidateLists() = topicCache.clear()
+    private fun cachedList(key: String): TopicListResponse? =
+        synchronized(cacheLock) { topicCache[key] }
+
+    fun invalidateLists() = synchronized(cacheLock) { topicCache.clear() }
 
     suspend fun categories(): CategoryList = try {
         json.decodeFromString<CategoryList>(api.getRaw("/categories.json"))
@@ -252,6 +280,7 @@ class UserRepository(
         runCatching { api.putForm("/notifications/mark-read", mapOf("dismiss" to "true")) }
     }
 
+
     // ============================================================
     // 搜索
     // ============================================================
@@ -284,4 +313,9 @@ class UserRepository(
         )
 
     private fun encode(s: String): String = URLEncoder.encode(s, "UTF-8")
+
+    private companion object {
+        /** 列表缓存上限 */
+        const val MAX_CACHED_LISTS = 30
+    }
 }
